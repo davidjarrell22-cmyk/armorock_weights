@@ -264,6 +264,10 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
 
                     // CHANGE ITEM WEIGHT COLUMN FIELD IF THE POURED WEIGHT VALUE FROM THE DATASET IS DIFFERENT FROM THE CURRENT LINE VALUE
                     if(originalWeight !== pouredWeight){
+                        log.debug({
+                          title: 'WO weight changed',
+                          details: `OS ${myKey} will be updated with new weight for WO ${woId}. Old: ${originalWeight}, New: ${pouredWeight}`
+                        });
                         osRec.setSublistValue({
                             sublistId: 'line',
                             fieldId: 'custcol_cp_outship_item_weight',
