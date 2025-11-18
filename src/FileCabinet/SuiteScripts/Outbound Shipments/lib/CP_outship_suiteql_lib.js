@@ -882,7 +882,7 @@ define(['N/query'] /**
                 createdfrom
         `;
 
-        //log.debug({ title: `sqlQuery lookupWoWeightsBatch was`, details: sqlQuery });
+        log.debug({ title: `sqlQuery lookupWoWeightsBatch was`, details: sqlQuery });
 
         let allResults = [];
 
@@ -890,6 +890,11 @@ define(['N/query'] /**
 
         results.pageRanges.forEach(pageRange => {
             allResults.push(...results.fetch({ index: pageRange.index }).data.asMappedResults());
+        });
+
+        log.debug({
+          title: 'lookupWoWeightsBatch results',
+          details: `Returned ${allResults.length} work order weights`
         });
 
         return allResults;
