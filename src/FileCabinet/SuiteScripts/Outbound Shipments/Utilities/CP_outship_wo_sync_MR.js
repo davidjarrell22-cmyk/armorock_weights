@@ -84,12 +84,16 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
             }
         });
 
-        // Query poured weights for all unique WOs
+        // Query poured weights for all unique WOs using batch lookup
         let woWeightsMap = {};
-        uniqueWoIds.forEach(woId => {
-            let result = suiteqlLib.lookupWoWeights(woId)[0];
-            woWeightsMap[woId] = result?.poured_weight || 0;
-        });
+        if (uniqueWoIds.length > 0) {
+            const batchResults = suiteqlLib.lookupWoWeightsBatch(
+              uniqueWoIds
+            );
+            batchResults.forEach(result => {
+                woWeightsMap[result.wo_id] = result.poured_weight || 0;
+            });
+        }
 
         // Now build instructionSet with the cached weights
         openWoLines.forEach(line => {

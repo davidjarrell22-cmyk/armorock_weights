@@ -859,6 +859,42 @@ define(['N/query'] /**
         return allResults;
     }
 
+    function lookupWoWeightsBatch(woIds) {
+        //LOOKS UP CUMULATIVE WEIGHTS FOR MULTIPLE WORK ORDERS
+
+        if (!woIds || woIds.length === 0) {
+            return {};
+        }
+
+        const woIdList = woIds.join(',');
+
+        let sqlQuery = `
+            SELECT
+                createdfrom AS wo_id,
+                ROUND(SUM(quantity)) AS poured_weight
+            FROM
+                transactionline
+            WHERE
+                createdfrom IN (${woIdList})
+                AND units = 1
+                AND quantity > 0
+            GROUP BY
+                createdfrom
+        `;
+
+        //log.debug({ title: `sqlQuery lookupWoWeightsBatch was`, details: sqlQuery });
+
+        let allResults = [];
+
+        let results = query.runSuiteQLPaged({ query: sqlQuery, params: [], pageSize: 5000 });
+
+        results.pageRanges.forEach(pageRange => {
+            allResults.push(...results.fetch({ index: pageRange.index }).data.asMappedResults());
+        });
+
+        return allResults;
+    }
+
     function lookupOSLines4SO(uniqueKeys){
         let whereClause = 'WHERE tl.custcol_cp_outship_shipitemtran IN (';
         let dynamicCriteria = '';
@@ -938,6 +974,7 @@ define(['N/query'] /**
         lookupKitMembers: lookupKitMembers,
         lookupItemInventory: lookupItemInventory,
         lookupWoWeights : lookupWoWeights,
+        lookupWoWeightsBatch : lookupWoWeightsBatch,
         lookupOSLines4SO : lookupOSLines4SO
     };
 });
