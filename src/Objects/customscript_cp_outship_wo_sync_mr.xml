@@ -1,0 +1,99 @@
+<mapreducescript scriptid="customscript_cp_outship_wo_sync_mr">
+  <description>Updates the WO Status and WO Begun values on all Outbound Shipment lines to the current WO values</description>
+  <isinactive>F</isinactive>
+  <name>CP | Outbound Shipment WO Sync - MR</name>
+  <notifyadmins>F</notifyadmins>
+  <notifyemails></notifyemails>
+  <notifyowner>T</notifyowner>
+  <scriptfile>[/SuiteScripts/Outbound Shipments/Utilities/CP_outship_wo_sync_MR.js]</scriptfile>
+  <scriptcustomfields>
+    <scriptcustomfield scriptid="custscript_cp_outhship_wo_mr_osid">
+      <accesslevel>2</accesslevel>
+      <applyformatting>F</applyformatting>
+      <checkspelling>F</checkspelling>
+      <defaultchecked>F</defaultchecked>
+      <defaultselection></defaultselection>
+      <defaultvalue></defaultvalue>
+      <description>Single Outbound Shipment specified to focus this script run on that OS instead of all</description>
+      <displayheight></displayheight>
+      <displaytype>NORMAL</displaytype>
+      <displaywidth></displaywidth>
+      <dynamicdefault></dynamicdefault>
+      <fieldtype>INTEGER</fieldtype>
+      <help>Single Outbound Shipment specified to focus this script run on that OS instead of all</help>
+      <isformula>F</isformula>
+      <ismandatory>F</ismandatory>
+      <label>Single Outbound Shipment</label>
+      <linktext></linktext>
+      <maxlength></maxlength>
+      <maxvalue></maxvalue>
+      <minvalue></minvalue>
+      <onparentdelete></onparentdelete>
+      <searchlevel>2</searchlevel>
+      <selectrecordtype></selectrecordtype>
+      <setting></setting>
+      <storevalue>T</storevalue>
+    </scriptcustomfield>
+  </scriptcustomfields>
+  <scriptdeployments>
+    <scriptdeployment scriptid="customdeploy_cp_outship_wo_sync_mr_daily">
+      <buffersize>1</buffersize>
+      <concurrencylimit>1</concurrencylimit>
+      <custscript_cp_outhship_wo_mr_osid></custscript_cp_outhship_wo_mr_osid>
+      <isdeployed>T</isdeployed>
+      <loglevel>DEBUG</loglevel>
+      <queueallstagesatonce>T</queueallstagesatonce>
+      <runasrole>ADMINISTRATOR</runasrole>
+      <status>SCHEDULED</status>
+      <title>CP | Outbound Shipment WO Sync - MR Daily</title>
+      <yieldaftermins>60</yieldaftermins>
+      <recurrence>
+        <daily>
+          <everyxdays>1</everyxdays>
+          <repeat></repeat>
+          <startdate>2025-04-08</startdate>
+          <starttime>04:00:00Z</starttime>
+        </daily>
+      </recurrence>
+    </scriptdeployment>
+    <scriptdeployment scriptid="customdeploy_cp_outship_wo_sync_mr_spec">
+      <buffersize>1</buffersize>
+      <concurrencylimit>1</concurrencylimit>
+      <custscript_cp_outhship_wo_mr_osid>99962</custscript_cp_outhship_wo_mr_osid>
+      <isdeployed>T</isdeployed>
+      <loglevel>DEBUG</loglevel>
+      <queueallstagesatonce>T</queueallstagesatonce>
+      <runasrole>ADMINISTRATOR</runasrole>
+      <status>NOTSCHEDULED</status>
+      <title>CP | Outbound Shipment WO Sync - MR - Specific</title>
+      <yieldaftermins>60</yieldaftermins>
+      <recurrence>
+        <single>
+          <repeat></repeat>
+          <startdate>2025-11-20</startdate>
+          <starttime>23:00:00Z</starttime>
+        </single>
+      </recurrence>
+    </scriptdeployment>
+    <scriptdeployment scriptid="customdeploy_cp_outship_wo_sync_mr">
+      <buffersize>1</buffersize>
+      <concurrencylimit>1</concurrencylimit>
+      <custscript_cp_outhship_wo_mr_osid></custscript_cp_outhship_wo_mr_osid>
+      <isdeployed>T</isdeployed>
+      <loglevel>DEBUG</loglevel>
+      <queueallstagesatonce>T</queueallstagesatonce>
+      <runasrole>ADMINISTRATOR</runasrole>
+      <status>NOTSCHEDULED</status>
+      <title>CP | Outbound Shipment WO Sync - MR</title>
+      <yieldaftermins>60</yieldaftermins>
+      <recurrence>
+        <daily>
+          <everyxdays>1</everyxdays>
+          <repeat>PT15M</repeat>
+          <startdate>2025-01-08</startdate>
+          <starttime>05:00:00Z</starttime>
+        </daily>
+      </recurrence>
+    </scriptdeployment>
+  </scriptdeployments>
+</mapreducescript>

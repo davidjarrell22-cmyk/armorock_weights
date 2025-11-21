@@ -84,6 +84,7 @@ define(['N/query', 'N/record',  './lib/cp_wo_weights_suiteql_lib.js'],
             // ASSIGN RETRIEVED VALUES TO LOCAL VARIABLES
             let woQuantity = woContext[0].quantity;
             let woBuiltQuantity = woContext[0].built;
+            let woWeightCalc = woContext[0].weight_calc;
             let woWeightOverride = woContext[0].weight_override;
 
             log.debug({
