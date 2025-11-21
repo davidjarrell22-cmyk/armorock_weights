@@ -20,7 +20,6 @@ define(['N/query'] /**
         let sqlQuery = `
             SELECT tl.quantity,
                    tl.quantityshiprecv           AS built,
-                   t.custbody_cp_weight_calc     AS weight_calc,
                    t.custbody_cp_weight_override AS weight_override
             FROM transaction as t
                 INNER JOIN TransactionLine as tl ON

@@ -22,6 +22,11 @@ define(['N/record', 'N/runtime', './lib/cp_wo_weights_suiteql_lib.js'],
                 return; // Skip script logic for non-UI changes
             }
 
+            // Skip for CREATE events - no old record to compare against
+            if (!oldRecord) {
+                return;
+            }
+
             let oldWeight = oldRecord.getValue({fieldId: 'custbody_pour_weight'});
             let newWeight = newRecord.getValue({fieldId: 'custbody_pour_weight'});
 
