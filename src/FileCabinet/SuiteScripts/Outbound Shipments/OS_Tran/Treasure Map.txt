@@ -1,0 +1,10 @@
+OS FORM						OS FORM ID							QUERY					OBJECT			SUITELET					POST
+Shipment Item Transaction	custcol_cp_outship_shipitemtran		tl_lineuniquekey		soLines[key]	custpage_soline				soLine
+Shipment Item				custcol_cp_outship_item				tl_item					item			custpage_item*				item
+Item Description			custcol_cp_outship_itemdesc			i_description			itemdesc		custpage_itemdesc			itemDesc
+UOM							custcol_cp_outship_uom				tl_units				uom				custpage_uom*				uom
+Quantity To Fulfill			custcol_cp_outship_qtytofulfill		N/A						N/A				custpage_qtytofulfill*		qtyToFulfill
+Quantity Fulfillable		N/A									tl_qtyfulfillable		qtyfulfillable	custpage_qtyfulfillable		N/A
+SO Rate						custcol_cp_outship_sorate			tl_rate					rate			custpage_rate*				rate
+Amount						amount								N/A						N/A				N/A							amount
+Work Order                  custcol_cp_outship_wo               tl_wo                   wo              custpage_wo                 wo
