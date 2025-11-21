@@ -111,7 +111,7 @@ define(['N/record', 'N/runtime', '../lib/CP_outship_suiteql_lib.js'] /**
         });
 
         let mrScript = runtime.getCurrentScript();
-        let osId = JSON.parse(mrScript.getParameter({ name: 'custscript_cp_outhship_wo_mr_osid' }));
+        let osId = JSON.parse(mrScript.getParameter({ name: 'custscript_cp_outship_wo_mr_osid' }));
 
         // Run cleanup utility to sync newly created WOs before main processing
         syncNewlyCreatedWorkOrders();

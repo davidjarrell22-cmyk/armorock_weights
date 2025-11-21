@@ -60,7 +60,7 @@ define(['N/ui/serverWidget', 'N/ui/dialog', 'N/task', '../lib/CP_outship_suiteql
                 mrTask.scriptId = `customscript_cp_outship_wo_sync_mr`;
                 mrTask.deploymentId = `customdeploy_cp_outship_wo_sync_mr`;
                 mrTask.params = {
-                    custscript_cp_outhship_wo_mr_osid: outboundShipment
+                    custscript_cp_outship_wo_mr_osid: outboundShipment
                 };
 
                 let mrTaskId = mrTask.submit();

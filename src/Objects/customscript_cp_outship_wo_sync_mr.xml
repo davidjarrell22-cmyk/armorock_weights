@@ -7,7 +7,7 @@
   <notifyowner>T</notifyowner>
   <scriptfile>[/SuiteScripts/Outbound Shipments/Utilities/CP_outship_wo_sync_MR.js]</scriptfile>
   <scriptcustomfields>
-    <scriptcustomfield scriptid="custscript_cp_outhship_wo_mr_osid">
+    <scriptcustomfield scriptid="custscript_cp_outship_wo_mr_osid">
       <accesslevel>2</accesslevel>
       <applyformatting>F</applyformatting>
       <checkspelling>F</checkspelling>
@@ -39,7 +39,7 @@
     <scriptdeployment scriptid="customdeploy_cp_outship_wo_sync_mr_daily">
       <buffersize>1</buffersize>
       <concurrencylimit>1</concurrencylimit>
-      <custscript_cp_outhship_wo_mr_osid></custscript_cp_outhship_wo_mr_osid>
+      <custscript_cp_outship_wo_mr_osid></custscript_cp_outship_wo_mr_osid>
       <isdeployed>T</isdeployed>
       <loglevel>DEBUG</loglevel>
       <queueallstagesatonce>T</queueallstagesatonce>
@@ -59,7 +59,7 @@
     <scriptdeployment scriptid="customdeploy_cp_outship_wo_sync_mr_spec">
       <buffersize>1</buffersize>
       <concurrencylimit>1</concurrencylimit>
-      <custscript_cp_outhship_wo_mr_osid>99962</custscript_cp_outhship_wo_mr_osid>
+      <custscript_cp_outship_wo_mr_osid>99962</custscript_cp_outship_wo_mr_osid>
       <isdeployed>T</isdeployed>
       <loglevel>DEBUG</loglevel>
       <queueallstagesatonce>T</queueallstagesatonce>
@@ -78,7 +78,7 @@
     <scriptdeployment scriptid="customdeploy_cp_outship_wo_sync_mr">
       <buffersize>1</buffersize>
       <concurrencylimit>1</concurrencylimit>
-      <custscript_cp_outhship_wo_mr_osid></custscript_cp_outhship_wo_mr_osid>
+      <custscript_cp_outship_wo_mr_osid></custscript_cp_outship_wo_mr_osid>
       <isdeployed>T</isdeployed>
       <loglevel>DEBUG</loglevel>
       <queueallstagesatonce>T</queueallstagesatonce>
