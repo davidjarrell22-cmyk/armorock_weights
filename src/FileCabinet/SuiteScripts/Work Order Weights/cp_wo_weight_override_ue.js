@@ -1,0 +1,64 @@
+/**
+ * @NApiVersion 2.1
+ * @NScriptType UserEventScript
+ * When the Actual Poured Weight value is manually edited, set the weight override flag to true.
+ * This will prevent the weight calculation logic from running and the weight value will be left alone.
+ * If a NULL value is entered, the weight override flag will be cleared.
+ */
+define(['N/record', 'N/runtime'],
+    /**
+ * @param{record} record
+ * param{runtime} runtime
+ */
+    (record, runtime) => {
+        const beforeSubmit = (scriptContext) => {
+            let oldRecord = scriptContext.oldRecord;
+            let newRecord = scriptContext.newRecord;
+
+            let exec = runtime.executionContext;
+
+            if (exec !== runtime.ContextType.USER_INTERFACE) {
+                return; // Skip script logic for non-UI changes
+            }
+
+            let oldWeight = oldRecord.getValue({fieldId: 'custbody_pour_weight'});
+            let newWeight = newRecord.getValue({fieldId: 'custbody_pour_weight'});
+
+            log.debug({
+                title: 'Weight override check',
+                details: `Old: ${oldWeight} (${typeof oldWeight}), New: ${newWeight} (${typeof newWeight})`
+            });
+
+            // Check if value is empty (null, undefined, empty string, or 0)
+            const isEmpty = (val) => val === null || val === undefined || val === '' || val === 0;
+            const hasValue = (val) => !isEmpty(val);
+
+            // USER HAS MANUALLY CLEARED THE CONTENTS OF THE ACTUAL POURED WEIGHT FIELD
+            if (isEmpty(newWeight) && hasValue(oldWeight)) {
+                newRecord.setValue({fieldId: 'custbody_cp_weight_override', value: false});
+                newRecord.setValue({fieldId: 'custbody_cp_pour_weight_per_unit', value: null});
+                log.debug({
+                    title: 'Manual weight override flag cleared',
+                    details: `Weight cleared from ${oldWeight} to ${newWeight}`
+                });
+            }
+
+            // USER HAS MANUALLY ENTERED A VALUE IN THE CONTENTS OF THE ACTUAL POURED WEIGHT FIELD
+            if (hasValue(newWeight) && oldWeight !== newWeight) {
+                let quantity = newRecord.getValue({fieldId: 'quantity'});
+                let pouredWeightPerUnit = quantity > 0 ? Math.round(newWeight / quantity) : 0;
+                newRecord.setValue({fieldId: 'custbody_cp_weight_override', value: true});
+                newRecord.setValue({fieldId: 'custbody_cp_pour_weight_per_unit', value: pouredWeightPerUnit});
+                log.debug({
+                    title: 'Manual weight override flag set',
+                    details: `Weight changed from ${oldWeight} to ${newWeight}, per unit: ${pouredWeightPerUnit}`
+                });
+            }
+
+        }
+
+
+
+        return {beforeSubmit}
+
+    });

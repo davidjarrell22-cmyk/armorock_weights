@@ -309,6 +309,45 @@ define(['N/query'] /**
         return allResults;
     }
 
+    function lookupOpenWoLinesSingleOS(osId) {
+        //Looks up data to determine information about lines on a single Outbound Shipments with linked Work Orders
+
+        let sqlQuery = `
+            SELECT
+                t.id                         AS t_id,
+                tl.id                        AS tl_id,
+                tl.custcol_cp_outship_wo     AS tl_wo,
+                SUBSTR(BUILTIN.DF(wo.status), (INSTR(BUILTIN.DF(wo.status), ':', -1) + 2)) AS wo_status,
+                wo.type
+            FROM
+                transaction                  AS t
+                    INNER JOIN transactionline   AS tl ON (tl.transaction = t.id)
+                    INNER JOIN transaction       AS wo ON (wo.id = tl.custcol_cp_outship_wo)
+            WHERE
+                t.recordtype = 'customtransaction_cp_outship'
+              AND BUILTIN.DF(t.status) IN (
+                                           'Outbound Shipment : To Be Fulfilled',
+                                           'Outbound Shipment : Partially Fulfilled'
+                )
+              AND tl.custcol_cp_outship_qtyremaining > 0
+              AND tl.custcol_cp_outship_wo IS NOT NULL
+              AND wo.type <> 'PurchOrd'
+              AND t.id = ${osId}
+        `;
+
+        log.debug({ title: `sqlQuery lookupOpenWoLinesSingleOS was`, details: sqlQuery });
+
+        let allResults = [];
+
+        let results = query.runSuiteQLPaged({ query: sqlQuery, params: [], pageSize: 5000 });
+
+        results.pageRanges.forEach(pageRange => {
+            allResults.push(...results.fetch({ index: pageRange.index }).data.asMappedResults());
+        });
+
+        return allResults;
+    }
+
     function lookupOpenWoLines() {
         //Looks up data to determine information about lines on outstanding Outbound Shipments with linked Work Orders
 
@@ -359,7 +398,7 @@ define(['N/query'] /**
                 custrecord_cp_outship_serial_shipitemtra = ${key}
         `;
 
-        log.debug({ title: `sqlQuery lookupExistingOutboundSerialLines was`, details: sqlQuery });
+        //log.debug({ title: `sqlQuery lookupExistingOutboundSerialLines was`, details: sqlQuery });
 
         let allResults = [];
 
@@ -475,7 +514,7 @@ define(['N/query'] /**
                 custrecord_cp_outship_serial_id IS NOT NULL
         `;
 
-        log.debug({ title: `sqlQuery lookupAssignedSerials was`, details: sqlQuery });
+        //log.debug({ title: `sqlQuery lookupAssignedSerials was`, details: sqlQuery });
 
         let allResults = [];
 
@@ -512,7 +551,7 @@ define(['N/query'] /**
                 custrecord_cp_outship_linked_os = ${osId}
         `;
 
-        log.debug({ title: `sqlQuery lookupLinkedOutboundSerials was`, details: sqlQuery });
+        //log.debug({ title: `sqlQuery lookupLinkedOutboundSerials was`, details: sqlQuery });
 
         let allResults = [];
 
@@ -832,21 +871,19 @@ define(['N/query'] /**
         return allResults;
     }
 
-    function lookupWoWeights(woId) {
-        //LOOKS UP CUMULATIVE WEIGHT OF COMPONENTS ISSUED TO A WORK ORDER
+    function lookupWoWeightSingleWO(woId) {
+        //LOOKS UP ACTUAL POURED WEIGHT VALUE FROM HEADER OF A WORK ORDER
 
         let sqlQuery = `
             SELECT
-                ROUND(SUM(quantity)) AS poured_weight
+                custbody_pour_weight	AS	poured_weight
             FROM
-                transactionline
+                transaction
             WHERE
-                createdfrom = ${woId}
-                AND units = 1
-                AND quantity > 0
+                id = ${woId}
         `;
 
-        //log.debug({ title: `sqlQuery lookupWoWeights was`, details: sqlQuery });
+        //log.debug({ title: `sqlQuery lookupWoWeight was`, details: sqlQuery });
 
         let allResults = [];
 
@@ -860,8 +897,7 @@ define(['N/query'] /**
     }
 
     function lookupWoWeightsBatch(woIds) {
-        //LOOKS UP CUMULATIVE WEIGHTS FOR MULTIPLE WORK ORDERS
-
+        //LOOKS UP ACTUAL POURED WEIGHT VALUE FROM HEADER OF MULTIPLE WORK ORDERS AT ONCE
         if (!woIds || woIds.length === 0) {
             return {};
         }
@@ -870,16 +906,14 @@ define(['N/query'] /**
 
         let sqlQuery = `
             SELECT
-                createdfrom AS wo_id,
-                ROUND(SUM(quantity)) AS poured_weight
+                id                      AS  wo_id,
+                BUILTIN.DF(id)          AS  wo_tran,
+                custbody_pour_weight	AS	poured_weight,
+                custbody_cp_pour_weight_per_unit    AS  per_unit_weight
             FROM
-                transactionline
+                transaction
             WHERE
-                createdfrom IN (${woIdList})
-                AND units = 1
-                AND quantity > 0
-            GROUP BY
-                createdfrom
+                id IN (${woIdList})
         `;
 
         log.debug({ title: `sqlQuery lookupWoWeightsBatch was`, details: sqlQuery });
@@ -962,6 +996,7 @@ define(['N/query'] /**
         lookupAddableSoLines: lookupAddableSoLines,
         lookupShippableLines: lookupShippableLines,
         lookupShippableLinesSingleOS: lookupShippableLinesSingleOS,
+        lookupOpenWoLinesSingleOS: lookupOpenWoLinesSingleOS,
         lookupOpenWoLines: lookupOpenWoLines,
         lookupExistingOutboundSerialLines: lookupExistingOutboundSerialLines,
         lookupExistingOutboundSerialLineIds: lookupExistingOutboundSerialLineIds,
@@ -978,7 +1013,7 @@ define(['N/query'] /**
         lookupKitItemsSingleOS: lookupKitItemsSingleOS,
         lookupKitMembers: lookupKitMembers,
         lookupItemInventory: lookupItemInventory,
-        lookupWoWeights : lookupWoWeights,
+        lookupWoWeightSingleWO : lookupWoWeightSingleWO,
         lookupWoWeightsBatch : lookupWoWeightsBatch,
         lookupOSLines4SO : lookupOSLines4SO
     };

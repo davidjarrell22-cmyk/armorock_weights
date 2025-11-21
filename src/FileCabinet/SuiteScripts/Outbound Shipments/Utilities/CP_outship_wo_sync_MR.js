@@ -2,10 +2,95 @@
  * @NApiVersion 2.1
  * @NScriptType MapReduceScript
  */
-define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
+define(['N/record', 'N/runtime', '../lib/CP_outship_suiteql_lib.js'] /**
  * @param{record} record
+ * @param{runtime} runtime
  * @param{suiteqlLib} suiteqlLib
- */, (record, suiteqlLib) => {
+ */, (record, runtime, suiteqlLib) => {
+
+    /**
+     * CLEANUP UTILITY: Syncs newly created Work Orders to Outbound Shipments
+     *
+     * This function handles a timing edge case where a Work Order is created
+     * after an Outbound Shipment line was added. When this occurs, the WO ID
+     * needs to be retroactively linked to the correct OS line by matching on
+     * the shipmentitemtran key.
+     *
+     * This cleanup runs before the main map/reduce processing begins.
+     *
+     */
+    const syncNewlyCreatedWorkOrders = () => {
+        const newWOs = suiteqlLib.lookupNewlyCreatedLinkedWOs();
+
+        log.audit({
+            title: 'Cleanup: Newly created linked WOs found',
+            details: `Count: ${newWOs.length}`
+        });
+
+        if (newWOs.length === 0) {
+            return;
+        }
+
+        let linkedCount = 0;
+
+        newWOs.forEach(newWO => {
+            const osId = newWO.t_id;
+            const osShipmentItemTran = newWO.tl_shipitemtran;
+            const woId = newWO.sotl_wo;
+
+            log.debug({
+                title: 'Cleanup: Processing newly created WO',
+                details: `Linking WO ${woId} to OS ${osId}`
+            });
+
+            const osRec = record.load({
+                type: 'customtransaction_cp_outship',
+                id: osId,
+                isDynamic: false
+            });
+
+            const linesCount = osRec.getLineCount({ sublistId: 'line' });
+
+            // Find matching line by shipmentitemtran key and update WO ID
+            for (let i = 0; i < linesCount; i++) {
+                const lineShipItemTran = osRec.getSublistValue({
+                    sublistId: 'line',
+                    fieldId: 'custcol_cp_outship_shipitemtran',
+                    line: i
+                });
+
+                if (parseInt(lineShipItemTran) === parseInt(osShipmentItemTran)) {
+                    osRec.setSublistValue({
+                        sublistId: 'line',
+                        fieldId: 'custcol_cp_outship_wo',
+                        line: i,
+                        value: woId
+                    });
+                    break;
+                }
+            }
+
+            try {
+                osRec.save();
+                linkedCount++;
+                log.debug({
+                    title: 'Cleanup: OS updated successfully',
+                    details: `OS ${osId} linked to WO ${woId}`
+                });
+            } catch (e) {
+                log.error({
+                    title: 'Cleanup: Failed to update OS',
+                    details: `OS ${osId}, Error: ${e.message}`
+                });
+            }
+        });
+
+        log.audit({
+            title: 'Cleanup complete',
+            details: `Successfully linked ${linkedCount} Work Orders to Outbound Shipments`
+        });
+    };
+
     /**
      * Defines the function that is executed at the beginning of the map/reduce process and generates the input data.
      * @param {Object} inputContext
@@ -20,94 +105,136 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
      */
 
     const getInputData = inputContext => {
-        //LOOK FOR LINES WHERE THE LINKED WO WAS CREATED AFTER THE LINE WAS ADDED TO THE OS AND CORRECT IF FOUND
-        let newWOs = suiteqlLib.lookupNewlyCreatedLinkedWOs();
-
-        //ITERATE THROUGH RESULTS IF ANY ARE FOUND
-        newWOs.forEach(newWO => {
-            log.debug({title: `Newly Created WO Found`, details: ``});
-            let osId = newWO.t_id;
-            let osShipmentItemTran = newWO.tl_shipitemtran;
-            let woId = newWO.sotl_wo;
-
-            //LOAD THE OS
-            let osRec = record.load({
-                type: 'customtransaction_cp_outship',
-                id: osId,
-                isDynamic: false
-            });
-
-            let linesCount = osRec.getLineCount({ sublistId: 'line' });
-
-            //ITERATE THROUGH LINES
-            for (let i = 0; i < linesCount; i++) {
-                let lineShipItemTran = osRec.getSublistValue({
-                    sublistId: 'line',
-                    fieldId: 'custcol_cp_outship_shipitemtran',
-                    line: i
-                });
-
-                //log.debug({title: `lineShipItemTran was`, details: lineShipItemTran});
-                //log.debug({title: `osShipmentItemTran was`, details: osShipmentItemTran});
-
-                //SET THE NEW WO ID TO THE COLUMN IT BELONGS IN MATCHING BY THE SHIPMENTITEMTRAN KEY
-                if (parseInt(lineShipItemTran) === parseInt(osShipmentItemTran)) {
-                    osRec.setSublistValue({
-                        sublistId: 'line',
-                        fieldId: 'custcol_cp_outship_wo',
-                        line: i,
-                        value: woId
-                    });
-                }
-            }
-
-            //SAVE THE OS
-            try {
-                let id = osRec.save();
-                //log.debug({ title: `OS saved successfully with new WO information`, details: id });
-            } catch (e) {
-                //log.error({ title: 'OS FAILED to save with new WO information. NetSuite said ', details: e.message });
-            }
+        log.audit({
+            title: '=== ENTERING GETINPUTDATA STAGE ===',
+            details: 'Beginning map/reduce input data collection'
         });
 
-        let openWoLines = suiteqlLib.lookupOpenWoLines();
+        let mrScript = runtime.getCurrentScript();
+        let osId = JSON.parse(mrScript.getParameter({ name: 'custscript_cp_outhship_wo_mr_osid' }));
+
+        // Run cleanup utility to sync newly created WOs before main processing
+        syncNewlyCreatedWorkOrders();
+
         let instructionSet = [];
 
-        // First, collect all unique woIds
-        let uniqueWoIds = [];
-        let woIdSet = new Set();
+        //IF SINGLE OS SPECIFIED BUILD INSTRUCTION SET FOR ONE OS - ELSE BUILD FOR ALL
+        if(osId){
+            log.debug({title: `Single OS ${osId} specified`, details: `Focussing run on OS ${osId}`});
 
-        openWoLines.forEach(line => {
-            if (line.tl_wo && !woIdSet.has(line.tl_wo)) {
-                uniqueWoIds.push(line.tl_wo);
-                woIdSet.add(line.tl_wo);
+            let openWoLines = suiteqlLib.lookupOpenWoLinesSingleOS(osId);
+            log.audit({
+                title: 'Open WO lines retrieved',
+                details: `Count: ${openWoLines.length}`
+            });
+
+            // First, collect all unique woIds
+            let uniqueWoIds = [];
+            let woIdSet = new Set();
+
+            openWoLines.forEach(line => {
+                if (line.tl_wo && !woIdSet.has(line.tl_wo)) {
+                    uniqueWoIds.push(line.tl_wo);
+                    woIdSet.add(line.tl_wo);
+                }
+            });
+
+            log.audit({
+                title: 'Unique WO IDs collected for batch lookup',
+                details: `Count: ${uniqueWoIds.length}`
+            });
+
+            // Query poured weights for all unique WOs using batch lookup
+            let woWeightsMap = {};
+            if (uniqueWoIds.length > 0) {
+                const batchResults = suiteqlLib.lookupWoWeightsBatch(
+                    uniqueWoIds
+                );
+                batchResults.forEach(result => {
+                    woWeightsMap[result.wo_id] = result.per_unit_weight || 0;
+                });
+                log.audit({
+                    title: 'Batch WO weights retrieved',
+                    details: `Retrieved weights for ${batchResults.length} work orders`
+                });
             }
-        });
 
-        // Query poured weights for all unique WOs using batch lookup
-        let woWeightsMap = {};
-        if (uniqueWoIds.length > 0) {
-            const batchResults = suiteqlLib.lookupWoWeightsBatch(
-              uniqueWoIds
-            );
-            batchResults.forEach(result => {
-                woWeightsMap[result.wo_id] = result.poured_weight || 0;
+            // Now build instructionSet with the cached weights
+            openWoLines.forEach(line => {
+                let instruction = {
+                    osId: line.t_id,
+                    lineId: line.tl_id,
+                    woId: line.tl_wo,
+                    woStatus: line.wo_status,
+                    pouredWeight: woWeightsMap[line.tl_wo] || 0
+                };
+
+                instructionSet.push(instruction);
+            });
+        }else {
+            log.debug({title: `No OS specified`, details: `Global Run`});
+            let openWoLines = suiteqlLib.lookupOpenWoLines();
+            log.audit({
+                title: 'Open WO lines retrieved',
+                details: `Count: ${openWoLines.length}`
+            });
+
+            // First, collect all unique woIds
+            let uniqueWoIds = [];
+            let woIdSet = new Set();
+
+            openWoLines.forEach(line => {
+                if (line.tl_wo && !woIdSet.has(line.tl_wo)) {
+                    uniqueWoIds.push(line.tl_wo);
+                    woIdSet.add(line.tl_wo);
+                }
+            });
+
+            log.audit({
+                title: 'Unique WO IDs collected for batch lookup',
+                details: `Count: ${uniqueWoIds.length}`
+            });
+
+            // Query poured weights for all unique WOs using batch lookup
+            let woWeightsMap = {};
+            if (uniqueWoIds.length > 0) {
+                const batchResults = suiteqlLib.lookupWoWeightsBatch(
+                    uniqueWoIds
+                );
+                batchResults.forEach(result => {
+                    woWeightsMap[result.wo_id] = result.per_unit_weight || 0;
+                });
+                log.audit({
+                    title: 'Batch WO weights retrieved',
+                    details: `Retrieved weights for ${batchResults.length} work orders`
+                });
+            }
+
+            // Now build instructionSet with the cached weights
+            openWoLines.forEach(line => {
+                let instruction = {
+                    osId: line.t_id,
+                    lineId: line.tl_id,
+                    woId: line.tl_wo,
+                    woStatus: line.wo_status,
+                    pouredWeight: woWeightsMap[line.tl_wo] || 0
+                };
+
+                instructionSet.push(instruction);
             });
         }
 
-        // Now build instructionSet with the cached weights
-        openWoLines.forEach(line => {
-            let instruction = {
-                osId: line.t_id,
-                lineId: line.tl_id,
-                woId: line.tl_wo,
-                woStatus: line.wo_status,
-                pouredWeight: woWeightsMap[line.tl_wo] || 0
-            };
 
-            instructionSet.push(instruction);
+
+        log.audit({
+            title: 'GETINPUTDATA STAGE COMPLETE',
+            details: `Returning ${instructionSet.length} instructions to MAP stage`
         });
 
+        log.audit({
+            title: '=== ENTERING MAP STAGE ===',
+            details: 'Processing instructions and grouping by Outbound Shipment'
+        });
 
         return instructionSet;
     };
@@ -132,9 +259,7 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
     const map = mapContext => {
         //GROUP EVERYTHING BY OUTBOUND SHIPMENT
 
-        //log.debug({ title: `**Entering MAP Stage**`, details: JSON.stringify(mapContext) });
         let result = JSON.parse(mapContext.value);
-        //log.debug({ title: `result in Map was `, details: JSON.stringify(result) });
 
         let myValue = {
             lineId: result.lineId,
@@ -143,7 +268,13 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
             pouredWeight: result.pouredWeight
         };
 
-        //log.debug({ title: `myValue was`, details: myValue });
+
+/*        if(result.osId === 100251)
+            log.debug({
+                title: 'Mapping instruction to OS',
+                details: `OS ${result.osId}: WO ${result.woId} (${result.woStatus}), Weight: ${result.pouredWeight}`
+            })*/
+
 
         mapContext.write({
             key: result.osId,
@@ -167,10 +298,20 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
      * @since 2015.2
      */
     const reduce = reduceContext => {
-        //log.debug({ title: `**Entering REDUCE Stage**`, details: JSON.stringify(reduceContext) });
+        if (reduceContext.executionNo === 0) {
+            log.audit({
+                title: '=== ENTERING REDUCE STAGE ===',
+                details: 'Processing grouped instructions and updating Outbound Shipments'
+            });
+        }
+
         let myKey = reduceContext.key;
         let myValues = reduceContext.values;
-        //log.debug({ title: `key and values were`, details: `Key: ${myKey} Values: ${myValues}` });
+
+        log.audit({
+            title: `Evaluating Outbound Shipment: ${myKey} - No Further Log Entries If No Changes Detected`,
+            details: `OS ID: ${myKey}, Instructions: ${myValues.length}`
+        });
 
         // LOAD EACH OUTBOUND SHIPMENT
 
@@ -183,6 +324,13 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
         let originalGlobalAllWoBegun = osRec.getValue({fieldId:'custbody_cp_outship_allwo_begun'});
         let osChanged = false;
         let linesCount = osRec.getLineCount({ sublistId: 'line' });
+
+        // Track changes for summary logging
+        let changesCount = {
+            woBegun: 0,
+            woStatus: 0,
+            weight: 0
+        };
 
         myValues.forEach(value => {
             let parsedValue = JSON.parse(value);
@@ -228,6 +376,11 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
 
                     // CHANGE WO_BEGUN COLUMN FIELD IF THE DATASET VALUE IS DIFFERENT FROM THE CURRENT LINE VALUE
                     if(originalWoBegun !== woBegun){
+                        log.debug({
+                            title: 'WO Begun changed',
+                            details: `OS ${myKey} WO Begun value for line with WO ${woId} will be updated. Old: ${originalWoBegun}, New: ${woBegun}`
+                        });
+
                         osRec.setSublistValue({
                             sublistId: 'line',
                             fieldId: 'custcol_cp_outship_wo_begun',
@@ -235,6 +388,7 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
                             value: woBegun
                         });
                         osChanged = true; // FLAG THAT A CHANGE HAS BEEN MADE TO THE OS SO SAVE WILL OCCUR
+                        changesCount.woBegun++;
                     }
 
                     // RECORD THE WORK ORDER STATUS BEFORE ANY MODIFICATION
@@ -246,6 +400,11 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
 
                     // CHANGE WO_STATUS COLUMN FIELD IF THE DATASET VALUE IS DIFFERENT FROM THE CURRENT LINE VALUE
                     if(originalWoStatus !== woStatus){
+                        log.debug({
+                            title: 'WO status changed',
+                            details: `OS ${myKey} will be updated with new status for WO ${woId}. Old: ${originalWoStatus}, New: ${woStatus}`
+                        });
+
                         osRec.setSublistValue({
                             sublistId: 'line',
                             fieldId: 'custcol_cp_outship_wo_status',
@@ -253,6 +412,7 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
                             value: woStatus
                         });
                         osChanged = true; // FLAG THAT A CHANGE HAS BEEN MADE TO THE OS SO SAVE WILL OCCUR
+                        changesCount.woStatus++;
                     }
 
                     // RECORD THE OS LINE ITEM WEIGHT BEFORE ANY MODIFICATION
@@ -263,7 +423,7 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
                     });
 
                     // CHANGE ITEM WEIGHT COLUMN FIELD IF THE POURED WEIGHT VALUE FROM THE DATASET IS DIFFERENT FROM THE CURRENT LINE VALUE
-                    if(originalWeight !== pouredWeight){
+                    if(parseInt(originalWeight) !== parseInt(pouredWeight)){
                         log.debug({
                           title: 'WO weight changed',
                           details: `OS ${myKey} will be updated with new weight for WO ${woId}. Old: ${originalWeight}, New: ${pouredWeight}`
@@ -275,16 +435,8 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
                             value: pouredWeight
                         });
 
-                        // // UPDATE ACTUAL POURED WEIGHT ON WORK ORDER HEADER
-                        // let id = record.submitFields({
-                        //     type: 'workorder',
-                        //     id: woId,
-                        //     values: {
-                        //         custbody_pour_weight : pouredWeight
-                        //     }
-                        // })
-
                         osChanged = true; // FLAG THAT A CHANGE HAS BEEN MADE TO THE OS SO SAVE WILL OCCUR
+                        changesCount.weight++;
                     }
                 }
             }
@@ -312,6 +464,23 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
         if(originalGlobalAllWoBegun !== newGlobalWoBegun) {
             osRec.setValue({ fieldId: 'custbody_cp_outship_allwo_begun', value: newGlobalWoBegun });
             osChanged = true; // FLAG THAT A CHANGE HAS BEEN MADE TO THE OS SO SAVE WILL OCCUR
+            log.debug({
+                title: 'Global WO Begun flag changed',
+                details: `OS ${myKey}: ${originalGlobalAllWoBegun} -> ${newGlobalWoBegun}`
+            });
+        }
+
+        // Log summary of changes
+        if (osChanged) {
+            log.audit({
+                title: 'OS changes summary',
+                details: `OS ${myKey}: WO Begun: ${changesCount.woBegun}, Status: ${changesCount.woStatus}, Weight: ${changesCount.weight} lines changed`
+            });
+        } else {
+/*            log.debug({
+                title: 'No changes needed',
+                details: `OS ${myKey}: All data already up to date`
+            });*/
         }
 
         //ONLY SAVE THE OS RECORD AND CONSUME USAGE IF IT HAS CHANGED
@@ -319,6 +488,10 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
             try {
                 let id = osRec.save();
                 log.debug({ title: `OS saved successfully`, details: id });
+                reduceContext.write({
+                    key: myKey,
+                    value: 'saved'
+                });
             } catch (e) {
                 log.error({ title: 'OS failed to save. NetSuite said ', details: e.message });
             }
@@ -345,6 +518,11 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
      * @since 2015.2
      */
     const summarize = summaryContext => {
+        log.audit({
+            title: '=== ENTERING SUMMARIZE STAGE ===',
+            details: 'Generating execution summary and statistics'
+        });
+
         log.audit({
             title: 'Usage units consumed',
             details: summaryContext.usage
@@ -413,6 +591,23 @@ define(['N/record', '../lib/CP_outship_suiteql_lib.js'] /**
         log.audit({
             title: 'Reduce statistics',
             details: `${reduceKeysProcessedSuccessfully} / ${reduceKeysProcessed} completed.`
+        });
+
+        // Count how many Outbound Shipments were actually saved
+        let savedCount = 0;
+        summaryContext.output.iterator().each(function(key, value) {
+            savedCount++;
+            return true;
+        });
+
+        log.audit({
+            title: 'Outbound Shipments saved',
+            details: `${savedCount} / ${reduceKeysProcessed} Outbound Shipments were updated and saved`
+        });
+
+        log.audit({
+            title: '=== MAP/REDUCE EXECUTION COMPLETE ===',
+            details: `Total Outbound Shipments processed: ${reduceKeysProcessed}, Saved: ${savedCount}, Errors: Map ${mapErrorCount}, Reduce ${reduceErrorCount}`
         });
     };
 
