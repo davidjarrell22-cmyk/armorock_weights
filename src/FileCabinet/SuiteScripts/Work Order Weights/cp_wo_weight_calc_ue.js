@@ -84,7 +84,6 @@ define(['N/query', 'N/record',  './lib/cp_wo_weights_suiteql_lib.js'],
             // ASSIGN RETRIEVED VALUES TO LOCAL VARIABLES
             let woQuantity = woContext[0].quantity;
             let woBuiltQuantity = woContext[0].built;
-            let woWeightCalc = woContext[0].weight_calc;
             let woWeightOverride = woContext[0].weight_override;
 
             log.debug({
@@ -93,10 +92,10 @@ define(['N/query', 'N/record',  './lib/cp_wo_weights_suiteql_lib.js'],
             });
 
             // DETERMINE IF ACTUAL POURED WEIGHT MUST BE CALCULATED
-            if (woBuiltQuantity === 0 || woQuantity === 0) {
+            if (!woBuiltQuantity || woBuiltQuantity <= 0 || !woQuantity || woQuantity <= 0) {
                 log.debug({
-                    title: 'addWeight: Skipped - zero quantity',
-                    details: `WO ${woId} has zero quantity or zero built, skipping calculation`
+                    title: 'addWeight: Skipped - invalid quantity',
+                    details: `WO ${woId} has invalid quantity or built value, skipping calculation`
                 });
                 return;
             }

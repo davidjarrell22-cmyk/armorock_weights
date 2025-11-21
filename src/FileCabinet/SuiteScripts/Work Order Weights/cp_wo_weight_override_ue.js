@@ -5,12 +5,13 @@
  * This will prevent the weight calculation logic from running and the weight value will be left alone.
  * If a NULL value is entered, the weight override flag will be cleared.
  */
-define(['N/record', 'N/runtime'],
+define(['N/record', 'N/runtime', './lib/cp_wo_weights_suiteql_lib.js'],
     /**
  * @param{record} record
  * param{runtime} runtime
+ * param{suiteqlLib} suiteqlLib
  */
-    (record, runtime) => {
+    (record, runtime, suiteqlLib) => {
         const beforeSubmit = (scriptContext) => {
             let oldRecord = scriptContext.oldRecord;
             let newRecord = scriptContext.newRecord;
@@ -45,8 +46,10 @@ define(['N/record', 'N/runtime'],
 
             // USER HAS MANUALLY ENTERED A VALUE IN THE CONTENTS OF THE ACTUAL POURED WEIGHT FIELD
             if (hasValue(newWeight) && oldWeight !== newWeight) {
-                let quantity = newRecord.getValue({fieldId: 'quantity'});
-                let pouredWeightPerUnit = quantity > 0 ? Math.round(newWeight / quantity) : 0;
+                let woContext = suiteqlLib.lookupWO(newRecord.id);
+                let quantityBuilt = woContext[0].built;
+                log.debug({title: `quantityBuilt was`, details: quantityBuilt});
+                let pouredWeightPerUnit = quantityBuilt > 0 ? Math.round(newWeight / quantityBuilt) : 0;
                 newRecord.setValue({fieldId: 'custbody_cp_weight_override', value: true});
                 newRecord.setValue({fieldId: 'custbody_cp_pour_weight_per_unit', value: pouredWeightPerUnit});
                 log.debug({
